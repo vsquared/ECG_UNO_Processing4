@@ -1,0 +1,279 @@
+/*
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+ */
+
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import javax.swing.event.*;
+import processing.serial.*;
+import processing.core.PApplet;
+
+javax.swing.JFrame frame;
+java.awt.Canvas canvas;
+
+JTextField outputFld;
+
+int _wndW = 1050;
+int _wndH = 400;
+int _fntSize = 13;
+int _btnH = 24;
+
+float x, y, y1;
+float inByte = 0;
+
+Serial myPort;
+int selectedIndex;
+String portName;
+boolean connected = false;
+boolean saveToDesktop = false;
+PApplet sketch = this;
+String outputStr = "";
+
+void deviceList(int x, int y, int w, int h) {
+  String device[] = Serial.list();
+  JComboBox devices = new JComboBox(device);
+  devices.setBounds(x, y, w, h);
+  devices.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  devices.setToolTipText("Devices");
+  frame.add(devices);
+  devices.addActionListener(new ActionListener() {
+    public void actionPerformed(ActionEvent evt) {
+      JComboBox comboBox = (JComboBox) evt.getSource();
+      selectedIndex = comboBox.getSelectedIndex();
+      portName = Serial.list()[selectedIndex];
+      myPort = new Serial(sketch, portName, 9600);
+      connected = true;
+    }
+  }
+  );
+  frame.setVisible(true);
+  devices.repaint();
+}
+
+void disconnectBtn(int x, int y, int w, int h) {
+  JButton btn = new JButton("Disconnect");
+  btn.setBounds(x, y, w, h);
+  btn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  frame.add(btn);
+  // **** Action **** //
+  btn.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+      if (connected) {
+        myPort.stop();
+        connected = false;
+      }
+    }
+  }
+  );
+  btn.repaint();
+}
+
+String getDateTime() {
+  int s = second();
+  int m = minute();
+  int h = hour();
+  int day = day();
+  int mo = month();
+  int yr = year();
+
+  // Avoid slashes which create folders
+  String date = nf(mo, 2)+nf(day, 2)+yr+"_";
+  String time = nf(h, 2)+nf(m, 2)+nf(s, 2);
+  String dateTime = date+time;
+  return dateTime;
+}
+
+void scrnShotBtn(int x, int y, int w, int h) {
+  JButton btn = new JButton("ScrnShot");
+  btn.setBounds(x, y, w, h);
+  btn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  btn.setToolTipText("Screen shot to be saved in existing folder.");
+  frame.add(btn);
+  // **** Action **** //
+  btn.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+      String dateTimeStr = getDateTime();
+      String scrnShotStr = dateTimeStr+".png";
+      if (outputStr.length() > 0) {
+        save(outputStr + "/" + scrnShotStr);
+        JOptionPane.showMessageDialog(frame, "Image saved to designated output folder.");
+      } else if (saveToDesktop == true) {
+        String desktopPathStr = System.getProperty("user.home") + "/Desktop/ECGs/";
+        save(desktopPathStr + scrnShotStr);
+        JOptionPane.showMessageDialog(frame, "Image saved to Desktop/ECGs folder.");
+      } else {
+        save(scrnShotStr); // Save to sketch( or Application) folder
+        JOptionPane.showMessageDialog(frame, "Image saved to sketch (or Application) folder.");
+      }
+    }
+  }
+  );
+  btn.repaint();
+}
+
+void selectFolderBtn(int x, int y, int w, int h) {
+  JButton btn = new JButton("Select folder...");
+  btn.setBounds(x, y, w, h);
+  btn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  btn.setToolTipText("Select existing folder for screen shot.");
+  frame.add(btn);
+  // **** Action **** //
+  btn.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+      JFileChooser chooser = new JFileChooser();
+      chooser.setDialogTitle("Select folder for screen shot.");
+      chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+      if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+        File file = chooser.getSelectedFile();
+        File dir = chooser.getCurrentDirectory();
+        outputStr = dir + "/" + file.getName();
+        outputFld.setText(outputStr);       
+      } else {
+        println("Open command canceled");
+      }
+    }
+  }
+  );
+  btn.repaint();
+}
+
+void outputFld(int x, int y, int w, int h) {
+  outputFld = new JTextField("");
+  outputFld.setBounds(x, y, w, h);
+  outputFld.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  frame.add(outputFld);
+  // **** Action **** //
+  outputFld.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+      outputStr = outputFld.getText();
+    }
+  }
+  );
+  outputFld.repaint(); // To make it visible after export application.
+}
+
+void clearBtn(int x, int y, int w, int h) {
+  JButton btn = new JButton("X");
+  btn.setBounds(x, y, w, h);
+  btn.setToolTipText("Clear output field.");
+  btn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  frame.add(btn);
+  // **** Action **** //
+  btn.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+     outputFld.setText("");
+     outputStr = "";
+    }
+  }
+  );
+  btn.repaint();
+}
+
+void desktopRadioBtn(int x, int y, int w, int h) {
+  String desktopPath = System.getProperty("user.home") + "/Desktop/ECGs";
+  String titleStr = "Save to desktop: ";
+  JRadioButton radioBtn = new JRadioButton(titleStr + desktopPath);
+  radioBtn.setBounds(x, y, w, h);
+  radioBtn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  radioBtn.setToolTipText("Save screen shot to existing desktop folder.");
+  frame.add(radioBtn);
+  radioBtn.addItemListener( new ItemListener() {
+    void itemStateChanged(ItemEvent evnt) {
+      if (evnt.getStateChange()==1) {
+        saveToDesktop = true;
+      } else {
+        saveToDesktop = false;
+      }
+    }
+  }
+  );
+  radioBtn.repaint();
+}
+
+void quitBtn(int x, int y, int w, int h) {
+  JButton btn = new JButton("Quit");
+  btn.setBounds(x, y, w, h);
+  btn.setFont(new Font("Lucida Grande", Font.PLAIN, _fntSize));
+  frame.add(btn);
+  // **** Action **** //
+  btn.addActionListener( new ActionListener() {
+    void actionPerformed(ActionEvent actionEvent) {
+      exit();
+    }
+  }
+  );
+}
+
+void buildWnd() {
+  deviceList(10, 15, 270, _btnH);
+  disconnectBtn(280, 15, 100, _btnH);
+  scrnShotBtn(380, 15, 90, _btnH);
+  selectFolderBtn(470, 15, 120, _btnH);
+  outputFld(595, 10, 310, _btnH);
+  clearBtn(905, 10, 50, _btnH);
+  desktopRadioBtn(595, 35, 380, _btnH);
+  quitBtn(_wndW - 80, 15, 60, _btnH);
+}
+
+void setup() {
+  size(_wndW, _wndH);
+  surface.setTitle("ECG");
+  frame = (javax.swing.JFrame) ((processing.awt.PSurfaceAWT.SmoothCanvas) surface.getNative()).getFrame();
+  canvas = (processing.awt.PSurfaceAWT.SmoothCanvas) ((processing.awt.PSurfaceAWT)surface).getNative();
+  frame.setBounds(600, 300, _wndW, _wndH); // Makes it possible to add swing components
+  canvas.setBounds(0, 70, _wndW, _wndH - 70);
+  background(255);
+  stroke(color(255, 0, 0));
+  javax.swing.SwingUtilities.invokeLater(new Runnable() {
+    public void run() {
+      buildWnd(); // Builds components on EventDispatchThread
+    }
+  }
+  );
+}
+
+void draw () {
+  if (inByte > 0) {
+    inByte = map(inByte, 0, 1023, 0, height);   // map to screen height
+  }
+  y1 = height - inByte;
+  line(x - 1, y, x, y1);
+  y = y1;
+  if (x >= width) {
+    x = 0; // at edge of screen -> back to beginning
+    background(255);
+  } else {
+    x++; // increment horizontal position:
+  }
+}
+
+void serialEvent( Serial myPort) {
+  //'\n' is the end delimiter indicating the end of a complete packet
+  String inStr = myPort.readStringUntil('\n');
+  //make sure our data isn't empty before continuing
+  if (inStr != null) {
+    //trim whitespace and formatting characters (like line feed, carriage return)
+    inStr = trim(inStr);
+    inByte = float(inStr);
+  }
+}
+
+// **** Arduino Code **** //
+/*
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() { 
+  Serial.println(analogRead(A5));
+  //Wait for a bit to keep serial data from saturating
+  delay(1);
+}
+*/
